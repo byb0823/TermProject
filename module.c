@@ -68,28 +68,28 @@ static irqreturn_t sw_interrupt_handler(int irq, void *dev_id) {
         return IRQ_HANDLED;
     }
 
-    // 수동 모드일 때 SW[0], SW[1] 입력 처리
+    // 수동 모드일 때 SW[0], SW[1], SW[2] 입력 처리
     if (current_mode == 3) {
         manual_mode_toggle_led(sw_num);
         return IRQ_HANDLED;
     }
     
-    // SW[0] - 전체 모드 선택
-    if (sw_num == 0) {
+    // SW[0] - 전체 모드 선택 (수동 모드가 아닐 때만)
+    if (sw_num == 0 && current_mode != 3) {
         current_mode = 1;
         printk(KERN_INFO "Mode changed to: All Mode (SW[0])\n");
         return IRQ_HANDLED;
     }
     
-    // SW[1] - 개별 모드 선택
-    if (sw_num == 1) {
+    // SW[1] - 개별 모드 선택 (수동 모드가 아닐 때만)
+    if (sw_num == 1 && current_mode != 3) {
         current_mode = 2;
         printk(KERN_INFO "Mode changed to: Individual Mode (SW[1])\n");
         return IRQ_HANDLED;
     }
     
-    // SW[2] - 수동 모드 선택 및 동작
-    if (sw_num == 2) {
+    // SW[2] - 수동 모드 선택 (수동 모드가 아닐 때만)
+    if (sw_num == 2 && current_mode != 3) {
         current_mode = 3;
         turn_off_all_leds();
         printk(KERN_INFO "Mode changed to: Manual Mode (SW[2])\n");
@@ -161,7 +161,7 @@ err_led:
     return ret;
 }
 
-// 모듈 종료
+// 모듈 제거
 static void led_control_exit(void) {
     int i;
     
@@ -186,4 +186,3 @@ static void led_control_exit(void) {
 MODULE_LICENSE("GPL");
 module_init(led_control_init);
 module_exit(led_control_exit);
-
