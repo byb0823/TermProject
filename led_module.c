@@ -42,19 +42,26 @@ static void set_all_mode(void)
 static void set_single_mode(void)
 {
     int i;
+    bool on = false;
     for (i = 0; i < 4; i++) {
-        if(led_state[i] == HIGH) break;
+        if(led_state[i] == HIGH) {
+            on = true;
+            break;
+        }
     }
 
-    if(i == 4) {
-        led_state[0] = HIGH;
+    if (on) {
+        led_state[i] = LOW;
+        gpio_set_value(led[i], led_state[i]);    
+
+        i = (i + 1) % 4;
+        led_state[i] = HIGH;
+        gpio_set_value(led[i], led_state[i]);
         return;
     }
 
-    led_state[i] = LOW;
-
-    i = (i+1) % 4;
-    led_state[i] = HIGH;
+    led_state[0] = HIGH;
+    gpio_set_value(led[0], led_state[0]);
 }
 
 /* --------------------------
@@ -68,6 +75,7 @@ static void led_timer_func(struct timer_list *timer)
         timer->expires = jiffies + HZ * 2;
         add_timer(timer);
 
+        set_all_led(LOW);
         set_all_mode();
         return;
     }
