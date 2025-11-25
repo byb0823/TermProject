@@ -90,19 +90,12 @@ static irqreturn_t sw_interrupt_handler(int irq, void *dev_id) {
     
     // SW[2] - 수동 모드 선택 및 동작
     if (sw_num == 2) {
-        if (current_mode != 3) {        //수동 모드가 아닌 경우 모드 변환, 수동 모드가 맞는 경우 led 켜는 동작
-            current_mode = 3;
-            turn_off_all_leds();
-            printk(KERN_INFO "Mode changed to: Manual Mode (SW[2])\n");
-        } else {
-            // 수동 모드에서 SW[2] 재입력시 LED[2] 토글
-            manual_mode_toggle_led(2);
-        }
+        current_mode = 3;
+        turn_off_all_leds();
+        printk(KERN_INFO "Mode changed to: Manual Mode (SW[2])\n");
         return IRQ_HANDLED;
     }
     
-
-
     return IRQ_HANDLED;
 }
 
