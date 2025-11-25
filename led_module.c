@@ -232,5 +232,3 @@ module_init(led_sw_module_init);
 module_exit(led_sw_module_exit);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Your Name");
-MODULE_DESCRIPTION("LED and Switch Control Module");
