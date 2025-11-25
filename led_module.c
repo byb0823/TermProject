@@ -42,27 +42,26 @@ static void set_all_mode(void)
 static void set_single_mode(void)
 {
     int i;
-    bool on = false;
+    bool found = false;
+
     for (i = 0; i < 4; i++) {
-        if(led_state[i] == HIGH) {
-            on = true;
+        if (led_state[i] == HIGH) {
+            found = true;
             break;
         }
     }
 
-    if (on) {
+    if (found) {
         led_state[i] = LOW;
-        gpio_set_value(led[i], LOW);    
+        gpio_set_value(led[i], LOW);
 
         i = (i + 1) % 4;
         led_state[i] = HIGH;
         gpio_set_value(led[i], HIGH);
-
-        return;
+    } else {
+        led_state[0] = HIGH;
+        gpio_set_value(led[0], HIGH);
     }
-
-    led_state[0] = HIGH;
-    gpio_set_value(led[0], HIGH);
 }
 
 /* --------------------------
