@@ -26,7 +26,7 @@ static void set_all_led(int value)
     int i;
     for (i = 0; i < 4; i++) {
         led_state[i] = value;
-        gpio_set_value(led[i], led_state[i]);
+        gpio_set_value(led[i], value);
     }
 }
 
@@ -52,16 +52,17 @@ static void set_single_mode(void)
 
     if (on) {
         led_state[i] = LOW;
-        gpio_set_value(led[i], led_state[i]);    
+        gpio_set_value(led[i], LOW);    
 
         i = (i + 1) % 4;
         led_state[i] = HIGH;
-        gpio_set_value(led[i], led_state[i]);
+        gpio_set_value(led[i], HIGH);
+
         return;
     }
 
     led_state[0] = HIGH;
-    gpio_set_value(led[0], led_state[0]);
+    gpio_set_value(led[0], HIGH);
 }
 
 /* --------------------------
@@ -75,7 +76,6 @@ static void led_timer_func(struct timer_list *timer)
         timer->expires = jiffies + HZ * 2;
         add_timer(timer);
 
-        set_all_led(LOW);
         set_all_mode();
         return;
     }
@@ -84,7 +84,6 @@ static void led_timer_func(struct timer_list *timer)
         timer->expires = jiffies + HZ * 2;
         add_timer(timer);
 
-        set_all_led(LOW);
         set_single_mode();
         return;
     }
@@ -96,6 +95,7 @@ static void led_timer_func(struct timer_list *timer)
 static irqreturn_t sw_irq_handler(int irq, void *dev_id)
 {
     printk(KERN_INFO "Debug %d\n",irq);
+    set_all_led(LOW);
 
     /* SW[0] 눌림인지 확인 */
     if (irq == irq_sw[0]) {
