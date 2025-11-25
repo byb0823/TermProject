@@ -67,6 +67,12 @@ static irqreturn_t sw_interrupt_handler(int irq, void *dev_id) {
         reset_mode();
         return IRQ_HANDLED;
     }
+
+    // 수동 모드일 때 SW[0], SW[1] 입력 처리
+    if (current_mode == 3) {
+        manual_mode_toggle_led(sw_num);
+        return IRQ_HANDLED;
+    }
     
     // SW[0] - 전체 모드 선택
     if (sw_num == 0) {
@@ -95,11 +101,8 @@ static irqreturn_t sw_interrupt_handler(int irq, void *dev_id) {
         return IRQ_HANDLED;
     }
     
-    // 수동 모드일 때 SW[0], SW[1] 입력 처리
-    if (current_mode == 3) {
-        manual_mode_toggle_led(sw_num);
-    }
-    
+
+
     return IRQ_HANDLED;
 }
 
