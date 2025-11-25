@@ -37,12 +37,11 @@ static void manual_mode_toggle_led(int sw_num) {
     if (sw_num >= 0 && sw_num < 3) {  // SW[0], SW[1], SW[2]만 수동 동작
         led_state[sw_num] = !led_state[sw_num];
         gpio_set_value(led_pins[sw_num], led_state[sw_num]);
-        printk(KERN_INFO "Manual Mode: LED[%d] %s\n", 
-               sw_num, led_state[sw_num] ? "ON" : "OFF");
+        printk(KERN_INFO "Manual Mode: LED[%d] %s\n", sw_num, led_state[sw_num] ? "ON" : "OFF");
     }
 }
 
-// 리셋 모드: 모든 동작 중지 및 모드 해제
+// 리셋 모드
 static void reset_mode(void) {
     turn_off_all_leds();
     current_mode = 0;
@@ -54,48 +53,40 @@ static irqreturn_t sw_interrupt_handler(int irq, void *dev_id) {
     int sw_num = *(int *)dev_id;
     unsigned long current_time = jiffies;
     unsigned long time_diff = jiffies_to_msecs(current_time - last_interrupt_time[sw_num]);
-    
-    // Debouncing: 200ms 이내 재입력 무시
+
+    // Debouncing
     if (time_diff < DEBOUNCE_TIME) {
         return IRQ_HANDLED;
     }
-    
     last_interrupt_time[sw_num] = current_time;
-    
-    // SW[3] - 리셋 모드
+
+    // 1️⃣ 수동 모드일 때 가장 우선적으로 LED 토글 (SW[0], SW[1], SW[2]만)
+    if (current_mode == 3 && sw_num < 3) {
+        manual_mode_toggle_led(sw_num);
+        return IRQ_HANDLED;
+    }
+
+    // 2️⃣ 리셋 모드 (SW[3])
     if (sw_num == 3) {
         reset_mode();
         return IRQ_HANDLED;
     }
 
-    // 수동 모드일 때 SW[0], SW[1], SW[2] 입력 처리
-    if (current_mode == 3) {
-        manual_mode_toggle_led(sw_num);
-        return IRQ_HANDLED;
-    }
-    
-    // SW[0] - 전체 모드 선택 (수동 모드가 아닐 때만)
-    if (sw_num == 0 && current_mode != 3) {
+    // 3️⃣ 그 외: 모드 선택 버튼
+    if (sw_num == 0) {
         current_mode = 1;
         printk(KERN_INFO "Mode changed to: All Mode (SW[0])\n");
-        return IRQ_HANDLED;
     }
-    
-    // SW[1] - 개별 모드 선택 (수동 모드가 아닐 때만)
-    if (sw_num == 1 && current_mode != 3) {
+    else if (sw_num == 1) {
         current_mode = 2;
         printk(KERN_INFO "Mode changed to: Individual Mode (SW[1])\n");
-        return IRQ_HANDLED;
     }
-    
-    // SW[2] - 수동 모드 선택 (수동 모드가 아닐 때만)
-    if (sw_num == 2 && current_mode != 3) {
+    else if (sw_num == 2) {
         current_mode = 3;
-        turn_off_all_leds();
+        turn_off_all_leds(); // 수동 시작 시 LED 초기화
         printk(KERN_INFO "Mode changed to: Manual Mode (SW[2])\n");
-        return IRQ_HANDLED;
     }
-    
+
     return IRQ_HANDLED;
 }
 
@@ -104,9 +95,9 @@ static int *sw_id[4];
 // 모듈 초기화
 static int led_control_init(void) {
     int i, ret;
-    
+
     printk(KERN_INFO "LED Control Module Loading...\n");
-    
+
     // LED GPIO 초기화
     for (i = 0; i < 4; i++) {
         ret = gpio_request(led_pins[i], "led");
@@ -116,7 +107,7 @@ static int led_control_init(void) {
         }
         gpio_direction_output(led_pins[i], 0);
     }
-    
+
     // 스위치 GPIO 및 인터럽트 초기화
     for (i = 0; i < 4; i++) {
         ret = gpio_request(sw_pins[i], "switch");
@@ -124,12 +115,12 @@ static int led_control_init(void) {
             printk(KERN_ERR "Failed to request Switch GPIO %d\n", sw_pins[i]);
             goto err_sw;
         }
-        
+
         gpio_direction_input(sw_pins[i]);
-        
+
         sw_id[i] = kmalloc(sizeof(int), GFP_KERNEL);
         *sw_id[i] = i;
-        
+
         sw_irq[i] = gpio_to_irq(sw_pins[i]);
         ret = request_irq(sw_irq[i], sw_interrupt_handler,
                          IRQF_TRIGGER_RISING, "switch_handler", sw_id[i]);
@@ -139,7 +130,7 @@ static int led_control_init(void) {
             goto err_irq;
         }
     }
-    
+
     printk(KERN_INFO "LED Control Module Loaded Successfully\n");
     return 0;
 
@@ -164,22 +155,19 @@ err_led:
 // 모듈 제거
 static void led_control_exit(void) {
     int i;
-    
-    // 모든 LED 끄기
+
     turn_off_all_leds();
-    
-    // 인터럽트 해제
+
     for (i = 0; i < 4; i++) {
         free_irq(sw_irq[i], sw_id[i]);
         kfree(sw_id[i]);
     }
-    
-    // GPIO 해제
+
     for (i = 0; i < 4; i++) {
         gpio_free(led_pins[i]);
         gpio_free(sw_pins[i]);
     }
-    
+
     printk(KERN_INFO "LED Control Module Unloaded\n");
 }
 
