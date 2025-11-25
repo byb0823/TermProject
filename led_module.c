@@ -30,7 +30,7 @@ static void set_all_led(int value)
     }
 }
 
-static void set_all_mode()
+static void set_all_mode(void)
 {
     int i;
     for (i = 0; i < 4; i++){
@@ -39,7 +39,7 @@ static void set_all_mode()
     }
 }
 
-static void set_single_mode()
+static void set_single_mode(void)
 {
     int i;
     for (i = 0; i < 4; i++) {
