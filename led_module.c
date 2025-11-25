@@ -16,14 +16,15 @@ enum { MODE_NONE, MODE_ALL, MODE_SINGLE };
 static int current_mode = MODE_NONE;
 
 static struct timer_list led_timer;
-static int[4] led_state = {0, 0, 0, 0};
+static int led_state[4] = {0, 0, 0, 0};
 
 /* --------------------------
  *     LED 제어 함수
  * ------------------------- */
 static void set_all_led(int value)
 {
-    for (int i = 0; i < 4; i++) {
+    int i;
+    for (i = 0; i < 4; i++) {
         led_state[i] = value;
         gpio_set_value(led[i], led_state[i]);
     }
@@ -31,7 +32,8 @@ static void set_all_led(int value)
 
 static void set_all_mode()
 {
-    for (int i = 0; i < 4; i++){
+    int i;
+    for (i = 0; i < 4; i++){
         led_state[i] = (led_state[i] + 1) % 2;
         gpio_set_value(led[i], led_state[i]);
     }
@@ -39,9 +41,14 @@ static void set_all_mode()
 
 static void set_single_mode()
 {
-    int i = 0;
-    while(led_state[i] == LOW) {
-        i++;
+    int i;
+    for (i = 0; i < 4; i++) {
+        if(led_state[i] == HIGH) break;
+    }
+
+    if(i == 4) {
+        led_state[0] = HIGH;
+        return;
     }
 
     led_state[i] = LOW;
@@ -65,8 +72,8 @@ static void led_timer_func(struct timer_list *timer)
         return;
     }
 
-    if(current_mode == MODEL_SINGLE) {
-        timer->expries = jiffies + HZ * 2;
+    if(current_mode == MODE_SINGLE) {
+        timer->expires = jiffies + HZ * 2;
         add_timer(timer);
 
         set_all_led(LOW);
@@ -88,18 +95,16 @@ static irqreturn_t sw_irq_handler(int irq, void *dev_id)
         current_mode = MODE_ALL;
 
         /* 타이머 시작 */
-        timer_setup(&led_timer, led_timer_func, 0);
-        timer.expires = jiffies + HZ * 2;
+        led_timer.expires = jiffies + HZ * 2;
         add_timer(&led_timer);
     }
 
     /* SW[1] 눌림인지 확인 */
     if(irq == irq_sw[1]){
-        printk(KERN_INFO "SW0 pressed: MODE_SINGLE ON!\n");
-        current_mode = MODE_SIGNLE;
+        printk(KERN_INFO "SW1 pressed: MODE_SINGLE ON!\n");
+        current_mode = MODE_SINGLE;
 
-        timer_setup(&ed_timer, led_timer_func, 0);
-        timer.expires = jiffies + HZ * 2;
+        led_timer.expires = jiffies + HZ * 2;
         add_timer(&led_timer);
     }
 
@@ -130,19 +135,17 @@ static int led_sw_module_init(void)
 
         ret = request_irq(
             irq_sw[i],
-            (irq_handler_t) sw_irq_handler,
+            sw_irq_handler,
             IRQF_TRIGGER_RISING,
-            "IRQ",
-            (void *)(sw_irq_handler)
+            "SW_IRQ",
+            &sw[i]
         );
 
         if (ret < 0)
             printk(KERN_ERR "request_irq failed for SW%d\n", i);
     }
 
-    /* 타이머 설정 */
     timer_setup(&led_timer, led_timer_func, 0);
-    add_timer(&led_timer)
 
     return 0;
 }
@@ -173,4 +176,4 @@ static void led_sw_module_exit(void)
 module_init(led_sw_module_init);
 module_exit(led_sw_module_exit);
 
-MODUEL_LICENSE("GPL");
+MODULE_LICENSE("GPL");
