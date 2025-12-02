@@ -6,7 +6,7 @@
 #include <linux/timer.h>
 #include <linux/cdev.h>
 
-#define DEV_NAME    "led_dev"
+#define DEV_NAME    "led_device"
 #define DEV_MAJOR   255
 
 #define MODE_NONE   0
@@ -20,6 +20,7 @@ static int led[4] = {23, 24, 25, 1};
 /* 모드 & 상태 */
 static int current_mode = MODE_NONE;
 static int led_state[4] = {0,0,0,0};
+static int manual_led_state[4] = {0, 0, 0, 0};
 
 /* 타이머 */
 static struct timer_list led_timer;
@@ -148,7 +149,7 @@ static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
         break;
 
     case 100: // Manual LED toggle
-        led_num = cmd;
+        led_num = arg;
         led_state[led_num] = !led_state[led_num];
         gpio_set_value(led[led_num], led_state[led_num]);
         break;
@@ -182,6 +183,13 @@ static int led_init(void)
 
     timer_setup(&led_timer, timer_func, 0);
 
+    int i;
+    for (i=0;i<4;i++){
+        gpio_request(led[i], "LED");
+        gpio_direction_output(led[i], 0);
+    }
+
+
     return 0;
 }
 
@@ -190,6 +198,9 @@ static int led_init(void)
 static void led_exit(void)
 {
     unregister_chrdev(DEV_MAJOR, DEV_NAME);
+
+    for(i=0;i<4;i++)
+    gpio_free(led[i]);
 }
 
 module_init(led_init);
