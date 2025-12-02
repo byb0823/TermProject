@@ -6,6 +6,7 @@
 #include <linux/gpio.h>
 #include <linux/timer.h>
 #include <linux/device.h>
+#include <linux/version.h>
 
 #define DEVICE_NAME "led_driver"
 #define CLASS_NAME "led_class"
@@ -110,6 +111,7 @@ static ssize_t device_write(struct file *file, const char __user *buffer, size_t
 {
     char mode_input[10];
     int mode;
+    int led_num;
     
     if (len > sizeof(mode_input) - 1)
         len = sizeof(mode_input) - 1;
@@ -123,6 +125,15 @@ static ssize_t device_write(struct file *file, const char __user *buffer, size_t
         return -EINVAL;
     
     printk(KERN_INFO "Received mode: %d\n", mode);
+    
+    /* MANUAL 모드일 때는 LED 번호로 처리 */
+    if (current_mode == MODE_MANUAL && mode >= 0 && mode <= 3) {
+        led_num = mode;
+        led_state[led_num] = !led_state[led_num];
+        gpio_set_value(led[led_num], led_state[led_num]);
+        printk(KERN_INFO "Manual LED[%d] = %d\n", led_num, led_state[led_num]);
+        return len;
+    }
     
     switch(mode) {
         case 1: /* MODE_ALL */
@@ -145,7 +156,7 @@ static ssize_t device_write(struct file *file, const char __user *buffer, size_t
             del_timer(&led_timer);
             set_all_led(LOW);
             current_mode = MODE_MANUAL;
-            printk(KERN_INFO "MODE_MANUAL activated (use GPIO to toggle LEDs)\n");
+            printk(KERN_INFO "MODE_MANUAL activated (use 0-3 to toggle LEDs)\n");
             break;
             
         case 4: /* RESET */
@@ -169,17 +180,23 @@ static struct file_operations fops = {
 /* init 함수 */
 static int __init led_module_init(void)
 {
-    int i;
+    int i, ret;
 
     printk(KERN_INFO "LED Driver Module Init\n");
 
     /* LED GPIO init */
     for (i = 0; i < 4; i++) {
-        if (gpio_request(led[i], "LED")) {
-            printk(KERN_ERR "Failed to request GPIO %d\n", led[i]);
-            return -ENODEV;
+        ret = gpio_request(led[i], "LED");
+        if (ret) {
+            printk(KERN_ERR "Failed to request GPIO %d (error %d)\n", led[i], ret);
+            while (i > 0) {
+                i--;
+                gpio_free(led[i]);
+            }
+            return ret;
         }
         gpio_direction_output(led[i], LOW);
+        printk(KERN_INFO "GPIO %d initialized\n", led[i]);
     }
 
     /* Character device 등록 */
@@ -190,7 +207,30 @@ static int __init led_module_init(void)
     }
 
     printk(KERN_INFO "Device registered with major number %d\n", major_number);
-    printk(KERN_INFO "Create device: mknod /dev/%s c %d 0\n", DEVICE_NAME, major_number);
+
+    /* 디바이스 클래스 생성 */
+    #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+        led_class = class_create(CLASS_NAME);
+    #else
+        led_class = class_create(THIS_MODULE, CLASS_NAME);
+    #endif
+    
+    if (IS_ERR(led_class)) {
+        unregister_chrdev(major_number, DEVICE_NAME);
+        printk(KERN_ERR "Failed to create class\n");
+        return PTR_ERR(led_class);
+    }
+
+    /* 디바이스 생성 (/dev/led_driver 자동 생성) */
+    led_device = device_create(led_class, NULL, MKDEV(major_number, 0), NULL, DEVICE_NAME);
+    if (IS_ERR(led_device)) {
+        class_destroy(led_class);
+        unregister_chrdev(major_number, DEVICE_NAME);
+        printk(KERN_ERR "Failed to create device\n");
+        return PTR_ERR(led_device);
+    }
+
+    printk(KERN_INFO "Device created: /dev/%s\n", DEVICE_NAME);
 
     timer_setup(&led_timer, led_timer_func, 0);
 
@@ -207,6 +247,9 @@ static void __exit led_module_exit(void)
     for (i = 0; i < 4; i++)
         gpio_free(led[i]);
 
+    /* 디바이스 제거 */
+    device_destroy(led_class, MKDEV(major_number, 0));
+    class_destroy(led_class);
     unregister_chrdev(major_number, DEVICE_NAME);
 
     printk(KERN_INFO "LED Driver Module Exit\n");

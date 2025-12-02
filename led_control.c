@@ -15,6 +15,11 @@ void display_menu(void)
     printf("Type a mode: ");
 }
 
+void display_manual_menu(void)
+{
+    printf("LED to enable: ");
+}
+
 int main(void)
 {
     int fd;
@@ -57,7 +62,47 @@ int main(void)
             break;
         }
 
-        if (mode_num == 4) {
+        if (mode_num == 3) {
+            /* MANUAL 모드 진입 */
+            printf("Mode 3 (MANUAL) activated!\n");
+            
+            while (1) {
+                display_manual_menu();
+                
+                if (fgets(mode, sizeof(mode), stdin) == NULL)
+                    break;
+                
+                if (sscanf(mode, "%d", &mode_num) != 1) {
+                    printf("Invalid input!\n");
+                    continue;
+                }
+                
+                /* 4 입력: 모드 리셋 후 메인 메뉴로 복귀 */
+                if (mode_num == 4) {
+                    /* 리셋 명령 전송 */
+                    if (write(fd, "4", 1) < 0) {
+                        perror("Write failed");
+                        break;
+                    }
+                    printf("Mode RESET! Returning to main menu...\n");
+                    break;
+                }
+                
+                /* LED 번호 검증 */
+                if (mode_num < 0 || mode_num > 3) {
+                    printf("Invalid LED number! Enter 0-3 or 4 to exit.\n");
+                    continue;
+                }
+                
+                /* LED 토글 명령 전송 */
+                if (write(fd, mode, strlen(mode)) < 0) {
+                    perror("Write failed");
+                    break;
+                }
+                
+                printf("LED[%d] toggled!\n", mode_num);
+            }
+        } else if (mode_num == 4) {
             printf("Mode RESET! All LEDs turned off.\n");
         } else {
             printf("Mode %d activated!\n", mode_num);
