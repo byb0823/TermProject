@@ -138,6 +138,9 @@ static irqreturn_t sw_irq_handler(int irq, void *dev_id)
     if(irq == irq_sw[1]){
         del_timer(&led_timer);
         set_all_led(LOW);
+
+        led_state[0] = HIGH;
+        gpio_set_value(led[0], HIGH);
         
         printk(KERN_INFO "SW1 pressed: MODE_SINGLE ON!\n");
         current_mode = MODE_SINGLE;
