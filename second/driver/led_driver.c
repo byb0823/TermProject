@@ -28,13 +28,6 @@ static int manual_led_state[4] = {0, 0, 0, 0};
 /* 타이머 */
 static struct timer_list led_timer;
 
-/* 함수 프로토타입 선언 */
-static void toggle_all_led(void);
-static void set_single_mode(void);
-static void set_all_led(int value);
-static void toggle_manual_led(int sw_index);
-static void reset_mode(void);
-
 /* 타이머 콜백 */
 static void timer_func(struct timer_list *t)
 {
