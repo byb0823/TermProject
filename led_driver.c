@@ -66,15 +66,6 @@ static void set_single_mode(void)
     }
 }
 
-static void toggle_led(int led_num)
-{
-    if (led_num >= 0 && led_num < 4) {
-        led_state[led_num] = !led_state[led_num];
-        gpio_set_value(led[led_num], led_state[led_num]);
-        printk(KERN_INFO "LED %d toggled to %d\n", led_num, led_state[led_num]);
-    }
-}
-
 static void reset_mode(void)
 {
     int i;
@@ -118,7 +109,7 @@ static int device_release(struct inode *inode, struct file *file)
 static ssize_t device_write(struct file *file, const char __user *buffer, size_t len, loff_t *offset)
 {
     char mode_input[10];
-    int value;
+    int mode;
     
     if (len > sizeof(mode_input) - 1)
         len = sizeof(mode_input) - 1;
@@ -128,29 +119,12 @@ static ssize_t device_write(struct file *file, const char __user *buffer, size_t
     
     mode_input[len] = '\0';
     
-    if (sscanf(mode_input, "%d", &value) != 1)
+    if (sscanf(mode_input, "%d", &mode) != 1)
         return -EINVAL;
     
-    printk(KERN_INFO "Received value: %d, Current mode: %d\n", value, current_mode);
+    printk(KERN_INFO "Received mode: %d\n", mode);
     
-    /* MODE_MANUAL일 때는 LED 번호로 처리 */
-    if (current_mode == MODE_MANUAL) {
-        if (value >= 0 && value <= 3) {
-            toggle_led(value);
-        } else if (value == 4) {
-            /* MODE_MANUAL 종료 */
-            set_all_led(LOW);
-            current_mode = MODE_NONE;
-            printk(KERN_INFO "MODE_MANUAL exited\n");
-        } else {
-            printk(KERN_WARNING "Invalid LED number: %d\n", value);
-            return -EINVAL;
-        }
-        return len;
-    }
-    
-    /* 일반 모드 선택 */
-    switch(value) {
+    switch(mode) {
         case 1: /* MODE_ALL */
             del_timer(&led_timer);
             set_all_led(HIGH);
@@ -171,15 +145,31 @@ static ssize_t device_write(struct file *file, const char __user *buffer, size_t
             del_timer(&led_timer);
             set_all_led(LOW);
             current_mode = MODE_MANUAL;
-            printk(KERN_INFO "MODE_MANUAL activated (select LED 0-3 to toggle, 4 to exit)\n");
+            printk(KERN_INFO "MODE_MANUAL activated\n");
             break;
             
         case 4: /* RESET */
             reset_mode();
             break;
             
+        /* MODE_MANUAL에서 개별 LED 토글 (30-33) */
+        case 30:
+        case 31:
+        case 32:
+        case 33:
+            if (current_mode == MODE_MANUAL) {
+                int led_num = mode - 30;
+                led_state[led_num] = !led_state[led_num];
+                gpio_set_value(led[led_num], led_state[led_num]);
+                printk(KERN_INFO "LED %d toggled to %d\n", led_num, led_state[led_num]);
+            } else {
+                printk(KERN_WARNING "Not in MANUAL mode\n");
+                return -EINVAL;
+            }
+            break;
+            
         default:
-            printk(KERN_WARNING "Invalid mode: %d\n", value);
+            printk(KERN_WARNING "Invalid mode: %d\n", mode);
             return -EINVAL;
     }
     
