@@ -125,7 +125,7 @@ static irqreturn_t sw_irq_handler(int irq, void *dev_id)
     /* SW[0] - 전체 모드 */
     if (irq == irq_sw[0]) {
         del_timer(&led_timer);
-        set_all_led(LOW);
+        set_all_led(HIGH);
         
         printk(KERN_INFO "SW0 pressed: MODE_ALL ON!\n");
         current_mode = MODE_ALL;
