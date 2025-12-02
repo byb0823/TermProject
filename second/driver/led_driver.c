@@ -15,6 +15,9 @@
 #define MODE_MANUAL 3
 #define MODE_RESET  4
 
+#define HIGH 1
+#define LOW  0
+
 static int led[4] = {23, 24, 25, 1};
 
 /* 모드 & 상태 */
