@@ -28,6 +28,13 @@ static int manual_led_state[4] = {0, 0, 0, 0};
 /* 타이머 */
 static struct timer_list led_timer;
 
+/* 함수 프로토타입 선언 */
+static void toggle_all_led(void);
+static void set_single_mode(void);
+static void set_all_led(int value);
+static void toggle_manual_led(int sw_index);
+static void reset_mode(void);
+
 /* 타이머 콜백 */
 static void timer_func(struct timer_list *t)
 {
@@ -161,6 +168,10 @@ static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
             printk(KERN_WARNING "Invalid LED number or not in MANUAL mode\n");
         }
         break;
+        
+    default:
+        printk(KERN_WARNING "Unknown ioctl command: %u\n", cmd);
+        return -EINVAL;
     }
 
     return 0;
@@ -168,11 +179,13 @@ static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 static int led_open(struct inode *inode, struct file *file)
 {
+    printk(KERN_INFO "LED device opened\n");
     return 0;
 }
 
 static int led_release(struct inode *inode, struct file *file)
 {
+    printk(KERN_INFO "LED device closed\n");
     return 0;
 }
 
@@ -200,6 +213,15 @@ static int __init led_init(void)
 
     for (i = 0; i < 4; i++) {
         ret = gpio_request(led[i], "LED");
+        if (ret < 0) {
+            printk(KERN_ERR "Failed to request GPIO %d\n", led[i]);
+            /* 이미 요청된 GPIO 해제 */
+            while (--i >= 0) {
+                gpio_free(led[i]);
+            }
+            unregister_chrdev(DEV_MAJOR, DEV_NAME);
+            return ret;
+        }
         gpio_direction_output(led[i], LOW);
     }
 
