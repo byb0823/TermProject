@@ -13,7 +13,7 @@
 
 int main()
 {
-    int fd = open("/dev/leddev", O_RDWR);
+    int fd = open("/dev/led_device", O_RDWR);
     int cmd, lednum;
 
     if(fd < 0){
