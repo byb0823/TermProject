@@ -33,7 +33,7 @@ static void timer_func(struct timer_list *t)
         mod_timer(&led_timer, jiffies + HZ*2);
 
     } else if(current_mode == MODE_SINGLE) {
-        single_step();
+        set_single_mode();
         mod_timer(&led_timer, jiffies + HZ*2);
     }
 }
@@ -149,7 +149,7 @@ static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
         break;
 
     case 100: // Manual LED toggle
-        led_num = arg;
+        int led_num = arg;
         led_state[led_num] = !led_state[led_num];
         gpio_set_value(led[led_num], led_state[led_num]);
         break;
@@ -199,8 +199,11 @@ static void led_exit(void)
 {
     unregister_chrdev(DEV_MAJOR, DEV_NAME);
 
+    int i;
     for(i=0;i<4;i++)
-    gpio_free(led[i]);
+       gpio_free(led[i]);
+
+    del_timer(&led_timer);
 }
 
 module_init(led_init);
