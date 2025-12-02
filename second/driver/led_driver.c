@@ -15,26 +15,35 @@
 #define MODE_MANUAL 3
 #define MODE_RESET  4
 
+#define HIGH 1
+#define LOW  0
+
 static int led[4] = {23, 24, 25, 1};
 
 /* 모드 & 상태 */
 static int current_mode = MODE_NONE;
-static int led_state[4] = {0,0,0,0};
+static int led_state[4] = {0, 0, 0, 0};
 static int manual_led_state[4] = {0, 0, 0, 0};
 
 /* 타이머 */
 static struct timer_list led_timer;
 
+/* 함수 프로토타입 선언 */
+static void toggle_all_led(void);
+static void set_single_mode(void);
+static void set_all_led(int value);
+static void toggle_manual_led(int sw_index);
+static void reset_mode(void);
+
 /* 타이머 콜백 */
 static void timer_func(struct timer_list *t)
 {
-    if(current_mode == MODE_ALL) {
+    if (current_mode == MODE_ALL) {
         toggle_all_led();
-        mod_timer(&led_timer, jiffies + HZ*2);
-
-    } else if(current_mode == MODE_SINGLE) {
+        mod_timer(&led_timer, jiffies + HZ * 2);
+    } else if (current_mode == MODE_SINGLE) {
         set_single_mode();
-        mod_timer(&led_timer, jiffies + HZ*2);
+        mod_timer(&led_timer, jiffies + HZ * 2);
     }
 }
 
@@ -51,7 +60,7 @@ static void set_all_led(int value)
 static void toggle_all_led(void)
 {
     int i;
-    for (i = 0; i < 4; i++){
+    for (i = 0; i < 4; i++) {
         led_state[i] = !led_state[i];
         gpio_set_value(led[i], led_state[i]);
     }
@@ -107,8 +116,10 @@ static void reset_mode(void)
 /* IOCTL 처리 */
 static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-    switch(cmd)
-    {
+    int i;
+    int led_num;
+    
+    switch (cmd) {
     case MODE_ALL:
         del_timer(&led_timer);
         set_all_led(HIGH);
@@ -116,6 +127,7 @@ static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
         current_mode = MODE_ALL;
         
         mod_timer(&led_timer, jiffies + HZ * 2);
+        printk(KERN_INFO "Mode: ALL\n");
         break;
 
     case MODE_SINGLE:
@@ -128,10 +140,11 @@ static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
         current_mode = MODE_SINGLE;
 
         mod_timer(&led_timer, jiffies + HZ * 2);
+        printk(KERN_INFO "Mode: SINGLE\n");
         break;
 
     case MODE_MANUAL:
-         del_timer(&led_timer);
+        del_timer(&led_timer);
         
         /* 수동 모드 진입 시 manual_led_state 초기화 (LED는 꺼진 상태로 시작) */
         for (i = 0; i < 4; i++) {
@@ -140,18 +153,20 @@ static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
         }
         
         current_mode = MODE_MANUAL;
+        printk(KERN_INFO "Mode: MANUAL\n");
         break;
 
     case MODE_RESET:
-        current_mode = MODE_NONE;
-        del_timer(&led_timer);
-        set_all_led(0);
+        reset_mode();
         break;
 
-    case 100: // Manual LED toggle
-        int led_num = arg;
-        led_state[led_num] = !led_state[led_num];
-        gpio_set_value(led[led_num], led_state[led_num]);
+    case 100: /* Manual LED toggle */
+        led_num = (int)arg;
+        if (current_mode == MODE_MANUAL && led_num >= 0 && led_num < 4) {
+            toggle_manual_led(led_num);
+        } else {
+            printk(KERN_WARNING "Invalid LED number or not in MANUAL mode\n");
+        }
         break;
     }
 
@@ -176,34 +191,44 @@ static struct file_operations fops = {
 };
 
 /* 드라이버 초기화 */
-static int led_init(void)
+static int __init led_init(void)
 {
-    int registration = register_chrdev(DEV_MAJOR, DEV_NAME, &fops);
-    if(registration < 0) return registration;
+    int registration;
+    int i;
+    int ret;
+    
+    registration = register_chrdev(DEV_MAJOR, DEV_NAME, &fops);
+    if (registration < 0) {
+        printk(KERN_ERR "Failed to register character device\n");
+        return registration;
+    }
 
     timer_setup(&led_timer, timer_func, 0);
 
-    int i;
-    for (i=0;i<4;i++){
-        gpio_request(led[i], "LED");
-        gpio_direction_output(led[i], 0);
+    for (i = 0; i < 4; i++) {
+        ret = gpio_request(led[i], "LED");
+        gpio_direction_output(led[i], LOW);
     }
 
-
+    printk(KERN_INFO "LED device driver initialized\n");
     return 0;
 }
 
-
 /* 드라이버 종료 */
-static void led_exit(void)
+static void __exit led_exit(void)
 {
-    unregister_chrdev(DEV_MAJOR, DEV_NAME);
-
     int i;
-    for(i=0;i<4;i++)
-       gpio_free(led[i]);
-
-    del_timer(&led_timer);
+    
+    del_timer_sync(&led_timer);
+    
+    for (i = 0; i < 4; i++) {
+        gpio_set_value(led[i], LOW);
+        gpio_free(led[i]);
+    }
+    
+    unregister_chrdev(DEV_MAJOR, DEV_NAME);
+    
+    printk(KERN_INFO "LED device driver removed\n");
 }
 
 module_init(led_init);
