@@ -50,32 +50,25 @@ static void toggle_all_led(void)
 static void set_single_mode(void)
 {
     int i;
-    int current_led = -1;
+    bool found = false;
 
-    /* 현재 켜진 LED 찾기 */
     for (i = 0; i < 4; i++) {
         if (led_state[i] == HIGH) {
-            current_led = i;
+            found = true;
             break;
         }
     }
 
-    /* 현재 LED 끄기 */
-    if (current_led >= 0) {
-        led_state[current_led] = LOW;
-        gpio_set_value(led[current_led], LOW);
-        
-        /* 다음 LED 켜기 */
-        current_led = (current_led + 1) % 4;
+    if (found) {
+        led_state[i] = LOW;
+        gpio_set_value(led[i], LOW);
+        i = (i + 1) % 4;
+        led_state[i] = HIGH;
+        gpio_set_value(led[i], HIGH);
     } else {
-        /* 켜진 LED가 없으면 첫 번째부터 */
-        current_led = 0;
+        led_state[0] = HIGH;
+        gpio_set_value(led[0], HIGH);
     }
-    
-    led_state[current_led] = HIGH;
-    gpio_set_value(led[current_led], HIGH);
-    
-    printk(KERN_INFO "Single mode: LED[%d] ON\n", current_led);
 }
 
 static void toggle_manual_led(int sw_index)
@@ -125,7 +118,6 @@ static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
         set_all_led(HIGH);
         current_mode = MODE_ALL;
         mod_timer(&led_timer, jiffies + HZ * 2);
-        printk(KERN_INFO "SW0 pressed: MODE_ALL ON!\n");
         break;
 
     case MODE_SINGLE:
@@ -135,7 +127,6 @@ static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
         gpio_set_value(led[0], HIGH);
         current_mode = MODE_SINGLE;
         mod_timer(&led_timer, jiffies + HZ * 2);
-        printk(KERN_INFO "SW1 pressed: MODE_SINGLE ON!\n");
         break;
 
     case MODE_MANUAL:
@@ -145,7 +136,6 @@ static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
             gpio_set_value(led[i], LOW);
         }
         current_mode = MODE_MANUAL;
-        printk(KERN_INFO "SW2 pressed: MODE_MANUAL ON!\n");
         break;
 
     case MODE_RESET:
@@ -198,14 +188,6 @@ static int __init led_init(void)
 
     for (i = 0; i < 4; i++) {
         ret = gpio_request(led[i], "LED");
-        if (ret < 0) {
-            printk(KERN_ERR "Failed to request GPIO %d\n", led[i]);
-            while (--i >= 0) {
-                gpio_free(led[i]);
-            }
-            unregister_chrdev(DEV_MAJOR, DEV_NAME);
-            return ret;
-        }
         gpio_direction_output(led[i], LOW);
     }
 
