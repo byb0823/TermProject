@@ -50,25 +50,32 @@ static void toggle_all_led(void)
 static void set_single_mode(void)
 {
     int i;
-    bool found = false;
+    int current_led = -1;
 
+    /* 현재 켜진 LED 찾기 */
     for (i = 0; i < 4; i++) {
         if (led_state[i] == HIGH) {
-            found = true;
+            current_led = i;
             break;
         }
     }
 
-    if (found) {
-        led_state[i] = LOW;
-        gpio_set_value(led[i], LOW);
-        i = (i + 1) % 4;
-        led_state[i] = HIGH;
-        gpio_set_value(led[i], HIGH);
+    /* 현재 LED 끄기 */
+    if (current_led >= 0) {
+        led_state[current_led] = LOW;
+        gpio_set_value(led[current_led], LOW);
+        
+        /* 다음 LED 켜기 */
+        current_led = (current_led + 1) % 4;
     } else {
-        led_state[0] = HIGH;
-        gpio_set_value(led[0], HIGH);
+        /* 켜진 LED가 없으면 첫 번째부터 */
+        current_led = 0;
     }
+    
+    led_state[current_led] = HIGH;
+    gpio_set_value(led[current_led], HIGH);
+    
+    printk(KERN_INFO "Single mode: LED[%d] ON\n", current_led);
 }
 
 static void toggle_manual_led(int sw_index)
@@ -175,7 +182,7 @@ static struct file_operations fops = {
     .release = led_release
 };
 
-static int led_init(void)
+static int __init led_init(void)
 {
     int registration;
     int i;
@@ -191,6 +198,14 @@ static int led_init(void)
 
     for (i = 0; i < 4; i++) {
         ret = gpio_request(led[i], "LED");
+        if (ret < 0) {
+            printk(KERN_ERR "Failed to request GPIO %d\n", led[i]);
+            while (--i >= 0) {
+                gpio_free(led[i]);
+            }
+            unregister_chrdev(DEV_MAJOR, DEV_NAME);
+            return ret;
+        }
         gpio_direction_output(led[i], LOW);
     }
 
@@ -198,7 +213,7 @@ static int led_init(void)
     return 0;
 }
 
-static void led_exit(void)
+static void __exit led_exit(void)
 {
     int i;
     
