@@ -28,26 +28,7 @@ static int manual_led_state[4] = {0, 0, 0, 0};
 /* 타이머 */
 static struct timer_list led_timer;
 
-/* 함수 프로토타입 선언 */
-static void toggle_all_led(void);
-static void set_single_mode(void);
-static void set_all_led(int value);
-static void toggle_manual_led(int sw_index);
-static void reset_mode(void);
-
-/* 타이머 콜백 */
-static void timer_func(struct timer_list *t)
-{
-    if (current_mode == MODE_ALL) {
-        toggle_all_led();
-        mod_timer(&led_timer, jiffies + HZ * 2);
-    } else if (current_mode == MODE_SINGLE) {
-        set_single_mode();
-        mod_timer(&led_timer, jiffies + HZ * 2);
-    }
-}
-
-/* LED 제어 함수 */
+/* LED 제어 함수 - timer_func 보다 먼저 정의 */
 static void set_all_led(int value)
 {
     int i;
@@ -113,6 +94,18 @@ static void reset_mode(void)
     printk(KERN_INFO "Mode RESET!\n");
 }
 
+/* 타이머 콜백 - LED 제어 함수들 다음에 정의 */
+static void timer_func(struct timer_list *t)
+{
+    if (current_mode == MODE_ALL) {
+        toggle_all_led();
+        mod_timer(&led_timer, jiffies + HZ * 2);
+    } else if (current_mode == MODE_SINGLE) {
+        set_single_mode();
+        mod_timer(&led_timer, jiffies + HZ * 2);
+    }
+}
+
 /* IOCTL 처리 */
 static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
@@ -123,44 +116,36 @@ static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
     case MODE_ALL:
         del_timer(&led_timer);
         set_all_led(HIGH);
-        
         current_mode = MODE_ALL;
-        
         mod_timer(&led_timer, jiffies + HZ * 2);
-        printk(KERN_INFO "Mode: ALL\n");
+        printk(KERN_INFO "SW0 pressed: MODE_ALL ON!\n");
         break;
 
     case MODE_SINGLE:
         del_timer(&led_timer);
         set_all_led(LOW);
-
         led_state[0] = HIGH;
         gpio_set_value(led[0], HIGH);
-        
         current_mode = MODE_SINGLE;
-
         mod_timer(&led_timer, jiffies + HZ * 2);
-        printk(KERN_INFO "Mode: SINGLE\n");
+        printk(KERN_INFO "SW1 pressed: MODE_SINGLE ON!\n");
         break;
 
     case MODE_MANUAL:
         del_timer(&led_timer);
-        
-        /* 수동 모드 진입 시 manual_led_state 초기화 (LED는 꺼진 상태로 시작) */
         for (i = 0; i < 4; i++) {
             manual_led_state[i] = LOW;
             gpio_set_value(led[i], LOW);
         }
-        
         current_mode = MODE_MANUAL;
-        printk(KERN_INFO "Mode: MANUAL\n");
+        printk(KERN_INFO "SW2 pressed: MODE_MANUAL ON!\n");
         break;
 
     case MODE_RESET:
         reset_mode();
         break;
 
-    case 100: /* Manual LED toggle */
+    case 100:
         led_num = (int)arg;
         if (current_mode == MODE_MANUAL && led_num >= 0 && led_num < 4) {
             toggle_manual_led(led_num);
@@ -168,10 +153,6 @@ static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
             printk(KERN_WARNING "Invalid LED number or not in MANUAL mode\n");
         }
         break;
-        
-    default:
-        printk(KERN_WARNING "Unknown ioctl command: %u\n", cmd);
-        return -EINVAL;
     }
 
     return 0;
@@ -179,13 +160,11 @@ static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 static int led_open(struct inode *inode, struct file *file)
 {
-    printk(KERN_INFO "LED device opened\n");
     return 0;
 }
 
 static int led_release(struct inode *inode, struct file *file)
 {
-    printk(KERN_INFO "LED device closed\n");
     return 0;
 }
 
@@ -196,8 +175,7 @@ static struct file_operations fops = {
     .release = led_release
 };
 
-/* 드라이버 초기화 */
-static int __init led_init(void)
+static int led_init(void)
 {
     int registration;
     int i;
@@ -213,15 +191,6 @@ static int __init led_init(void)
 
     for (i = 0; i < 4; i++) {
         ret = gpio_request(led[i], "LED");
-        if (ret < 0) {
-            printk(KERN_ERR "Failed to request GPIO %d\n", led[i]);
-            /* 이미 요청된 GPIO 해제 */
-            while (--i >= 0) {
-                gpio_free(led[i]);
-            }
-            unregister_chrdev(DEV_MAJOR, DEV_NAME);
-            return ret;
-        }
         gpio_direction_output(led[i], LOW);
     }
 
@@ -229,8 +198,7 @@ static int __init led_init(void)
     return 0;
 }
 
-/* 드라이버 종료 */
-static void __exit led_exit(void)
+static void led_exit(void)
 {
     int i;
     
