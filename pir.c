@@ -5,12 +5,10 @@
 #include <linux/timer.h>
 #include <linux/jiffies.h>
 
-MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Your Name");
-MODULE_DESCRIPTION("PIR Sensor Alarm System");
+
 
 // GPIO 번호 정의
-#define PIR_GPIO 18  // PIR 센서 GPIO (실제 연결된 핀에 맞게 수정)
+#define PIR_GPIO 7 
 static int LED[] = {23, 24, 25, 1};
 static int SW[] = {4, 17, 27, 22};
 
@@ -177,3 +175,4 @@ static void __exit pir_alarm_exit(void)
 
 module_init(pir_alarm_init);
 module_exit(pir_alarm_exit);
+MODULE_LICENSE("GPL");
