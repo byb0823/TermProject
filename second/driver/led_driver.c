@@ -127,10 +127,12 @@ static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
         break;
 
     case MODE_SINGLE:
-        current_single_led_index = 0; 
-        gpio_set_value(led[0], HIGH); 
-        led_state[0] = HIGH;
-        
+        current_single_led_index = 0;
+        // 모든 LED 상태 초기화
+        for (i = 0; i < 4; i++) {
+            led_state[i] = (i == 0) ? HIGH : LOW;
+            gpio_set_value(led[i], led_state[i]);
+        }
         current_mode = MODE_SINGLE;
         mod_timer(&led_timer, jiffies + HZ * 2);
         printk(KERN_INFO "Mode 2: SINGLE mode activated. LED[0] ON.\n");
