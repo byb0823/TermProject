@@ -1,16 +1,10 @@
-obj-m += led_driver.o
+obj-m := driver_pir_alarm.o
 
 KDIR := /lib/modules/$(shell uname -r)/build
 PWD := $(shell pwd)
 
-all: module user_program
-
-module:
-	make -C $(KDIR) M=$(PWD) modules
-
-user_program:
-	gcc -o led_control led_control.c
+default:
+	$(MAKE) -C $(KDIR) M=$(PWD) modules
 
 clean:
-	make -C $(KDIR) M=$(PWD) clean
-	rm -f led_control
+	$(MAKE) -C $(KDIR) M=$(PWD) clean
