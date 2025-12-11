@@ -82,7 +82,7 @@ static void reset_mode(void)
 {
     int i;
     
-    del_timer_sync(&led_timer);
+    del_timer(&led_timer);
     
     for (i = 0; i < 4; i++) {
         led_state[i] = LOW;
@@ -127,13 +127,8 @@ static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
         break;
 
     case MODE_SINGLE:
-        int i;
+        reset_mode();
         current_single_led_index = 0;
-        // 모든 LED 상태 초기화 
-        for (i = 0; i < 4; i++) {
-            led_state[i] = (i == 0) ? HIGH : LOW;
-            gpio_set_value(led[i], led_state[i]);
-        }
         current_mode = MODE_SINGLE;
         mod_timer(&led_timer, jiffies + HZ * 2);
         printk(KERN_INFO "Mode 2: SINGLE mode activated. LED[0] ON.\n");
