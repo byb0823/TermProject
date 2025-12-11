@@ -6,30 +6,31 @@
 #include <linux/timer.h>
 #include <linux/cdev.h>
 #include <linux/jiffies.h>
-#include <linux/err.h> // IS_ERR, PTR_ERR 매크로 사용을 위해 포함
+#include <linux/err.h>
+#include <linux/ioctl.h>
 
 #define DEV_NAME    "led_device"
 #define DEV_MAJOR    255
 
-// IOCTL Command Codes
-#define MODE_ALL     1
-#define MODE_SINGLE  2
-#define MODE_MANUAL  3
-#define MODE_RESET   4
-#define IOCTL_MANUAL_CONTROL 100 
+// IOCTL 매직 넘버
+#define LED_IOCTL_MAGIC 'L'
+
+// IOCTL Command Codes (올바른 방식)
+#define MODE_ALL     _IO(LED_IOCTL_MAGIC, 1)
+#define MODE_SINGLE  _IO(LED_IOCTL_MAGIC, 2)
+#define MODE_MANUAL  _IO(LED_IOCTL_MAGIC, 3)
+#define MODE_RESET   _IO(LED_IOCTL_MAGIC, 4)
+#define IOCTL_MANUAL_CONTROL _IOW(LED_IOCTL_MAGIC, 5, int)
 
 #define HIGH 1
 #define LOW  0
 
-static int led[4] = {23, 24, 25, 1}; // LED GPIO 핀 번호
+static int led[4] = {23, 24, 25, 1};
 
-/* 상태 변수 */
-static int current_mode = 0; // 0: MODE_NONE
+static int current_mode = 0;
 static int led_state[4] = {0, 0, 0, 0};
 static int current_single_led_index = 0; 
 static struct timer_list led_timer;
-
-/* --- LED 제어 함수 (이전과 동일) --- */
 
 static void set_all_led(int value)
 {
@@ -53,36 +54,31 @@ static void set_single_mode(void)
 {
     int i;
     
-    // 1. 이전 LED 끄기
     gpio_set_value(led[current_single_led_index], LOW);
-    
-    // 2. 다음 LED 인덱스 계산 (0 -> 1 -> 2 -> 3 -> 0 순환)
     current_single_led_index = (current_single_led_index + 1) % 4;
-    
-    // 3. 현재 LED 켜기
     gpio_set_value(led[current_single_led_index], HIGH);
     
-    // led_state 업데이트
     for (i = 0; i < 4; i++) {
         led_state[i] = (i == current_single_led_index) ? HIGH : LOW;
     }
     
-    printk(KERN_INFO "Single Mode: LED[%d] is ON (Index: %d)\n", led[current_single_led_index], current_single_led_index);
+    printk(KERN_INFO "Single Mode: LED[%d] is ON (Index: %d)\n", 
+           led[current_single_led_index], current_single_led_index);
 }
 
 static void toggle_manual_led(int index)
 {
     led_state[index] = !led_state[index];
     gpio_set_value(led[index], led_state[index]);
-    printk(KERN_INFO "Manual Mode: LED[%d] (GPIO %d) Toggled to %d\n", index, led[index], led_state[index]);
+    printk(KERN_INFO "Manual Mode: LED[%d] (GPIO %d) Toggled to %d\n", 
+           index, led[index], led_state[index]);
 }
-
 
 static void reset_mode(void)
 {
     int i;
     
-    del_timer(&led_timer);
+    del_timer_sync(&led_timer);
     
     for (i = 0; i < 4; i++) {
         led_state[i] = LOW;
@@ -93,9 +89,6 @@ static void reset_mode(void)
     current_single_led_index = 0;
     printk(KERN_INFO "Mode RESET: All LEDs OFF.\n");
 }
-
-
-/* --- 타이머 콜백 (이전과 동일) --- */
 
 static void timer_func(struct timer_list *t)
 {
@@ -108,13 +101,13 @@ static void timer_func(struct timer_list *t)
     }
 }
 
-
 static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
     int led_index;
+    int i;
     
-    // 리셋 명령이 아닌 모드 전환 명령이 들어오면 타이머 삭제 및 리셋
-    if (cmd != MODE_MANUAL && cmd != MODE_RESET && cmd != IOCTL_MANUAL_CONTROL) {
+    // IOCTL_MANUAL_CONTROL과 MODE_RESET을 제외한 모든 명령에서 리셋
+    if (cmd != IOCTL_MANUAL_CONTROL && cmd != MODE_RESET) {
         reset_mode();
     }
     
@@ -127,15 +120,18 @@ static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
         break;
 
     case MODE_SINGLE:
-        reset_mode();
         current_single_led_index = 0;
+        // 모든 LED 상태 초기화
+        for (i = 0; i < 4; i++) {
+            led_state[i] = (i == 0) ? HIGH : LOW;
+            gpio_set_value(led[i], led_state[i]);
+        }
         current_mode = MODE_SINGLE;
         mod_timer(&led_timer, jiffies + HZ * 2);
         printk(KERN_INFO "Mode 2: SINGLE mode activated. LED[0] ON.\n");
         break;
 
     case MODE_MANUAL:
-        reset_mode(); 
         current_mode = MODE_MANUAL;
         printk(KERN_INFO "Mode 3: MANUAL mode activated.\n");
         break;
@@ -147,12 +143,16 @@ static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
     case IOCTL_MANUAL_CONTROL:
         led_index = (int)arg;
         
-        if (current_mode == MODE_MANUAL && led_index >= 0 && led_index <= 3) {
+        if (current_mode != MODE_MANUAL) {
+            printk(KERN_WARNING "Manual Control: Not in MANUAL mode.\n");
+            return -EINVAL;
+        }
+        
+        if (led_index >= 0 && led_index <= 3) {
             toggle_manual_led(led_index);
-        } else if (current_mode == MODE_MANUAL && led_index == 4) { 
-            reset_mode();
         } else {
-            printk(KERN_WARNING "Manual Mode: Invalid input %d or not in MANUAL mode.\n", led_index);
+            printk(KERN_WARNING "Manual Control: Invalid LED index %d.\n", led_index);
+            return -EINVAL;
         }
         break;
         
@@ -181,7 +181,6 @@ static struct file_operations fops = {
     .release = led_release
 };
 
-
 static int led_init(void)
 {
     int i;
@@ -200,15 +199,13 @@ static int led_init(void)
         if (ret < 0) {
             printk(KERN_ERR "Failed to request LED GPIO %d\n", led[i]);
             
-            // 실패 시, 이전에 성공적으로 요청된 모든 GPIO 해제
             int j;
             for (j = 0; j < i; j++) {
                 gpio_free(led[j]);
             }
-            // 문자 장치 등록 해제
             unregister_chrdev(DEV_MAJOR, DEV_NAME);
             
-            return ret; // 에러 코드 반환
+            return ret;
         }
         gpio_direction_output(led[i], LOW);
     }
@@ -221,7 +218,7 @@ static void led_exit(void)
 {
     int i;
     
-    reset_mode(); // 타이머 삭제 및 모든 LED 끄기 포함
+    reset_mode();
 
     for (i = 0; i < 4; i++) {
         gpio_free(led[i]);
