@@ -1,10 +1,19 @@
-obj-m := driver_pir_alarm.o
+obj-m += pir.o
 
 KDIR := /lib/modules/$(shell uname -r)/build
 PWD := $(shell pwd)
 
-default:
+all:
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
 
 clean:
 	$(MAKE) -C $(KDIR) M=$(PWD) clean
+
+install:
+	sudo insmod pir.ko
+
+uninstall:
+	sudo rmmod pir
+
+test:
+	dmesg | tail -20
