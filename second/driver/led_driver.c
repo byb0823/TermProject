@@ -25,7 +25,8 @@ static int led[4] = {23, 24, 25, 1};
 static int current_mode = MODE_NONE;
 static int led_state[4] = {0, 0, 0, 0};
 static int manual_led_state[4] = {0, 0, 0, 0};
-// **[수정]** 개별 모드에서 현재 켜져 있는 LED 인덱스
+
+// 개별 모드에서 현재 켜져 있는 LED 인덱스
 static int current_single_led_index = 0; 
 
 /* 타이머 */
@@ -50,23 +51,19 @@ static void toggle_all_led(void)
     }
 }
 
-// **[수정]** 개별 모드: 현재 인덱스를 추적하며 하나씩 순차적으로 켜고 끄기
+// 개별 모드: 현재 인덱스를 추적하며 하나씩 순차적으로 켜고 끄기
 static void set_single_mode(void)
 {
     // 1. 이전 LED 끄기
+    led_state[current_single_led_index] = LOW;
     gpio_set_value(led[current_single_led_index], LOW);
     
     // 2. 다음 LED 인덱스 계산 (0 -> 1 -> 2 -> 3 -> 0 순환)
     current_single_led_index = (current_single_led_index + 1) % 4;
     
     // 3. 현재 LED 켜기
+    led_state[current_single_led_index] = HIGH;
     gpio_set_value(led[current_single_led_index], HIGH);
-    
-    // led_state 배열도 업데이트 (선택 사항, 필요하다면)
-    int i;
-    for (i = 0; i < 4; i++) {
-        led_state[i] = (i == current_single_led_index) ? HIGH : LOW;
-    }
     
     printk(KERN_INFO "Single Mode: LED[%d] is ON\n", current_single_led_index);
 }
@@ -91,7 +88,7 @@ static void reset_mode(void)
     }
     
     current_mode = MODE_NONE;
-    current_single_led_index = 0; // **[추가]** 리셋 시 인덱스 초기화
+    current_single_led_index = 0; // 리셋 시 인덱스 초기화
     printk(KERN_INFO "Mode RESET!\n");
 }
 
@@ -115,7 +112,7 @@ static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
     
     // 모드 변경 시 기존 타이머 삭제 및 LED 초기화 (Manual 모드 제외)
     if (cmd != MODE_MANUAL && cmd != MODE_RESET && cmd != 100) {
-        del_timer_sync(&led_timer);
+        del_timer(&led_timer);
         set_all_led(LOW); // 모든 LED 끄기
         for (i = 0; i < 4; i++) {
             manual_led_state[i] = LOW; // Manual 상태 초기화
@@ -123,49 +120,49 @@ static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
     }
     
     switch (cmd) {
-    case MODE_ALL:
-        set_all_led(HIGH); // 시작 시 모두 켜짐
-        current_mode = MODE_ALL;
-        mod_timer(&led_timer, jiffies + HZ * 2);
-        printk(KERN_INFO "Mode set to ALL\n");
-        break;
+        case MODE_ALL:
+            set_all_led(HIGH); // 시작 시 모두 켜짐
+            current_mode = MODE_ALL;
+            mod_timer(&led_timer, jiffies + HZ * 2);
+            printk(KERN_INFO "Mode set to ALL\n");
+            break;
 
-    case MODE_SINGLE:
-        // **[수정]** 개별 모드 진입 시, 첫 번째 LED 켜고 인덱스 초기화
-        current_single_led_index = 0;
-        gpio_set_value(led[current_single_led_index], HIGH);
-        led_state[current_single_led_index] = HIGH;
-        
-        current_mode = MODE_SINGLE;
-        mod_timer(&led_timer, jiffies + HZ * 2);
-        printk(KERN_INFO "Mode set to SINGLE. LED[0] is ON\n");
-        break;
+        case MODE_SINGLE:
+            // 개별 모드 진입 시, 첫 번째 LED 켜고 인덱스 초기화
+            current_single_led_index = 0;
+            gpio_set_value(led[current_single_led_index], HIGH);
+            led_state[current_single_led_index] = HIGH;
+            
+            current_mode = MODE_SINGLE;
+            mod_timer(&led_timer, jiffies + HZ * 2);
+            printk(KERN_INFO "Mode set to SINGLE. LED[0] is ON\n");
+            break;
 
-    case MODE_MANUAL:
-        // Manual 모드는 LED를 켜거나 끄지 않고 상태만 저장/출력
-        current_mode = MODE_MANUAL;
-        printk(KERN_INFO "Mode set to MANUAL\n");
-        break;
+        case MODE_MANUAL:
+            // Manual 모드는 LED를 켜거나 끄지 않고 상태만 저장/출력
+            current_mode = MODE_MANUAL;
+            printk(KERN_INFO "Mode set to MANUAL\n");
+            break;
 
-    case MODE_RESET:
-        reset_mode();
-        break;
-
-    case 100: // Manual 모드에서 특정 LED 제어 (사용자 프로그램용)
-        led_num = (int)arg;
-        if (current_mode == MODE_MANUAL && led_num >= 0 && led_num < 4) {
-            toggle_manual_led(led_num);
-        } else if (current_mode == MODE_MANUAL && led_num == 4) {
-            // Manual 모드에서 4 입력 시 리셋 (요구사항 2. (4) 참고)
+        case MODE_RESET:
             reset_mode();
-        } else {
-            printk(KERN_WARNING "Invalid LED number (%d) or not in MANUAL mode\n", led_num);
-        }
-        break;
-        
-    default:
-        printk(KERN_WARNING "Invalid IOCTL command: %u\n", cmd);
-        break;
+            break;
+
+        case 100:
+            led_num = (int)arg;
+            if (current_mode == MODE_MANUAL && led_num >= 0 && led_num < 4) {
+                toggle_manual_led(led_num);
+            } else if (current_mode == MODE_MANUAL && led_num == 4) {
+                // Manual 모드에서 4 입력 시 리셋 
+                reset_mode();
+            } else {
+                printk(KERN_WARNING "Invalid LED number (%d) or not in MANUAL mode\n", led_num);
+            }
+            break;
+            
+        default:
+            printk(KERN_WARNING "Invalid IOCTL command: %u\n", cmd);
+            break;
     }
 
     return 0;
