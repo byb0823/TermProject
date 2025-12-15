@@ -5,10 +5,8 @@
 #include <unistd.h>
 #include <string.h>
 
-// IOCTL 매직 넘버
 #define LED_IOCTL_MAGIC 'L'
 
-// 드라이버와 동일한 명령어 정의
 #define MODE_ALL     _IO(LED_IOCTL_MAGIC, 1)
 #define MODE_SINGLE  _IO(LED_IOCTL_MAGIC, 2)
 #define MODE_MANUAL  _IO(LED_IOCTL_MAGIC, 3)
@@ -16,21 +14,16 @@
 #define IOCTL_MANUAL_CONTROL _IOW(LED_IOCTL_MAGIC, 5, int)
 
 void print_menu(void) {
-    printf("\n--- LED Control Mode ---\n");
-    printf("Mode 1: 전체 모드\n");
-    printf("Mode 2: 개별 모드\n");
-    printf("Mode 3: 수동 모드\n");
-    printf("Mode 4: 리셋 모드\n");
-    printf("------------------------\n");
+    printf("Mode 1: \n");
+    printf("Mode 2: \n");
+    printf("Mode 3: \n");
+    printf("Mode 4: \n");
 }
 
 void manual_mode_loop(int fd) {
     int led_input;
     char buffer[10];
 
-    printf("\n--- Manual Mode Activated (Enter 0-4) ---\n");
-    printf("Enter LED to enable/disable (0, 1, 2, 3), or 4 to RESET: \n");
-    
     while (1) {
         printf("LED to enable: ");
         if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
@@ -43,7 +36,6 @@ void manual_mode_loop(int fd) {
         }
 
         if (led_input == 4) {
-            printf("Input 4 received. Resetting mode.\n");
             break; 
         }
 

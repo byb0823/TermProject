@@ -15,7 +15,7 @@
 // IOCTL 매직 넘버
 #define LED_IOCTL_MAGIC 'L'
 
-// IOCTL Command Codes (올바른 방식)
+// IOCTL Command Codes
 #define MODE_ALL     _IO(LED_IOCTL_MAGIC, 1)
 #define MODE_SINGLE  _IO(LED_IOCTL_MAGIC, 2)
 #define MODE_MANUAL  _IO(LED_IOCTL_MAGIC, 3)
@@ -29,7 +29,7 @@ static int led[4] = {23, 24, 25, 1};
 
 static int current_mode = 0;
 static int led_state[4] = {0, 0, 0, 0};
-static int current_single_led_index = 0; 
+
 static struct timer_list led_timer;
 
 static void set_all_led(int value)
@@ -53,17 +53,25 @@ static void toggle_all_led(void)
 static void set_single_mode(void)
 {
     int i;
-    
-    gpio_set_value(led[current_single_led_index], LOW);
-    current_single_led_index = (current_single_led_index + 1) % 4;
-    gpio_set_value(led[current_single_led_index], HIGH);
-    
-    for (i = 0; i < 4; i++) {
-        led_state[i] = (i == current_single_led_index) ? HIGH : LOW;
+    bool found = false;
+
+    for(i = 0; i < 4; i++) {
+        if (led_state[i] == HIGH) {
+            found = true;
+            break;
+        }
     }
-    
-    printk(KERN_INFO "Single Mode: LED[%d] is ON (Index: %d)\n", 
-           led[current_single_led_index], current_single_led_index);
+
+   if (found) {
+        led_state[i] = LOW;
+        gpio_set_value(led[i], LOW);
+        i = (i + 1) % 4;
+        led_state[i] = HIGH;
+        gpio_set_value(led[i], HIGH);
+    } else {
+        led_state[0] = HIGH;
+        gpio_set_value(led[0], HIGH);
+    }
 }
 
 static void toggle_manual_led(int index)
@@ -86,7 +94,6 @@ static void reset_mode(void)
     }
     
     current_mode = 0;
-    current_single_led_index = 0;
     printk(KERN_INFO "Mode RESET: All LEDs OFF.\n");
 }
 
@@ -112,53 +119,48 @@ static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
     }
     
     switch (cmd) {
-    case MODE_ALL:
-        set_all_led(HIGH); 
-        current_mode = MODE_ALL;
-        mod_timer(&led_timer, jiffies + HZ * 2);
-        printk(KERN_INFO "Mode 1: ALL mode activated.\n");
-        break;
+        case MODE_ALL:
+            set_all_led(HIGH); 
+            current_mode = MODE_ALL;
+            mod_timer(&led_timer, jiffies + HZ * 2);
+            printk(KERN_INFO "Mode 1: ALL mode activated.\n");
+            break;
 
-    case MODE_SINGLE:
-        current_single_led_index = 0;
-        // 모든 LED 상태 초기화
-        for (i = 0; i < 4; i++) {
-            led_state[i] = (i == 0) ? HIGH : LOW;
-            gpio_set_value(led[i], led_state[i]);
-        }
-        current_mode = MODE_SINGLE;
-        mod_timer(&led_timer, jiffies + HZ * 2);
-        printk(KERN_INFO "Mode 2: SINGLE mode activated. LED[0] ON.\n");
-        break;
+        case MODE_SINGLE:
+            set_all_led(LOW);
 
-    case MODE_MANUAL:
-        current_mode = MODE_MANUAL;
-        printk(KERN_INFO "Mode 3: MANUAL mode activated.\n");
-        break;
+            led_state[0] = HIGH;
+            gpio_set_value(led[0], HIGH);
 
-    case MODE_RESET: 
-        reset_mode();
-        break;
+            printk(KERN_INFO "Mode 2: SINGLE mode activated. LED[0] ON.\n");
+            current_mode = MODE_SINGLE;
 
-    case IOCTL_MANUAL_CONTROL:
-        led_index = (int)arg;
-        
-        if (current_mode != MODE_MANUAL) {
-            printk(KERN_WARNING "Manual Control: Not in MANUAL mode.\n");
+            mod_timer(&led_timer, jiffies + HZ * 2);
+            break;
+
+        case MODE_MANUAL:
+            current_mode = MODE_MANUAL;
+            printk(KERN_INFO "Mode 3: MANUAL mode activated.\n");
+            break;
+
+        case MODE_RESET: 
+            reset_mode();
+            break;
+
+        case IOCTL_MANUAL_CONTROL:
+            led_index = (int)arg;
+            
+            if (led_index >= 0 && led_index <= 3) {
+                toggle_manual_led(led_index);
+            } else {
+                printk(KERN_WARNING "Manual Control: Invalid LED index %d.\n", led_index);
+                return -EINVAL;
+            }
+            break;
+            
+        default:
+            printk(KERN_WARNING "Invalid IOCTL command: %u\n", cmd);
             return -EINVAL;
-        }
-        
-        if (led_index >= 0 && led_index <= 3) {
-            toggle_manual_led(led_index);
-        } else {
-            printk(KERN_WARNING "Manual Control: Invalid LED index %d.\n", led_index);
-            return -EINVAL;
-        }
-        break;
-        
-    default:
-        printk(KERN_WARNING "Invalid IOCTL command: %u\n", cmd);
-        return -EINVAL;
     }
 
     return 0;
@@ -183,8 +185,7 @@ static struct file_operations fops = {
 
 static int led_init(void)
 {
-    int i;
-    int ret;
+    int i, ret;
     
     ret = register_chrdev(DEV_MAJOR, DEV_NAME, &fops);
     if (ret < 0) {
@@ -195,18 +196,7 @@ static int led_init(void)
     timer_setup(&led_timer, timer_func, 0);
 
     for (i = 0; i < 4; i++) {
-        ret = gpio_request(led[i], "LED");
-        if (ret < 0) {
-            printk(KERN_ERR "Failed to request LED GPIO %d\n", led[i]);
-            
-            int j;
-            for (j = 0; j < i; j++) {
-                gpio_free(led[j]);
-            }
-            unregister_chrdev(DEV_MAJOR, DEV_NAME);
-            
-            return ret;
-        }
+        gpio_request(led[i], "LED");
         gpio_direction_output(led[i], LOW);
     }
     
