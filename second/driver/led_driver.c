@@ -114,7 +114,6 @@ static void timer_func(struct timer_list *t)
 static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
     int led_index;
-    int i;
     
     // IOCTL_MANUAL_CONTROL과 MODE_RESET을 제외한 모든 명령에서 리셋
     if (cmd != IOCTL_MANUAL_CONTROL && cmd != MODE_RESET) {
