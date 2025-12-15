@@ -65,7 +65,12 @@ static void toggle_manual_led(int sw_index)
 {
     manual_led_state[sw_index] = !manual_led_state[sw_index];
     gpio_set_value(led[sw_index], manual_led_state[sw_index]);
-    printk(KERN_INFO "Manual LED[%d] = %d\n", sw_index, manual_led_state[sw_index]);
+
+    if (manual_led_state[sw_index] == HIGH) {
+        printk(KERN_INFO "led[%d] ON\n", sw_index);
+    } else {
+        printk(KERN_INFO "led[%d] OFF\n", sw_index);
+    }
 }
 
 static void reset_mode(void)
@@ -81,7 +86,6 @@ static void reset_mode(void)
     }
     
     current_mode = MODE_NONE;
-    printk(KERN_INFO "Mode RESET!\n");
 }
 
 /* 타이머 콜백 */
@@ -101,11 +105,10 @@ static irqreturn_t sw_irq_handler(int irq, void *dev_id)
 {
     int i;
     
-    printk(KERN_INFO "IRQ %d triggered, current_mode=%d\n", irq, current_mode);
-    
     /* SW[3] - 리셋 모드 (항상 동작) */
     if (irq == irq_sw[3]) {
         reset_mode();
+        printk(KERN_INFO "SW3 pressed: 모드 리셋!\n");
         return IRQ_HANDLED;
     }
     
@@ -127,7 +130,7 @@ static irqreturn_t sw_irq_handler(int irq, void *dev_id)
         del_timer(&led_timer);
         set_all_led(HIGH);
         
-        printk(KERN_INFO "SW0 pressed: MODE_ALL ON!\n");
+        printk(KERN_INFO "SW0 pressed: 전체 모드 ON!\n");
         current_mode = MODE_ALL;
         
         mod_timer(&led_timer, jiffies + HZ * 2);
@@ -142,7 +145,7 @@ static irqreturn_t sw_irq_handler(int irq, void *dev_id)
         led_state[0] = HIGH;
         gpio_set_value(led[0], HIGH);
         
-        printk(KERN_INFO "SW1 pressed: MODE_SINGLE ON!\n");
+        printk(KERN_INFO "SW1 pressed: 개별 모드 ON!\n");
         current_mode = MODE_SINGLE;
 
         mod_timer(&led_timer, jiffies + HZ * 2);
@@ -160,7 +163,7 @@ static irqreturn_t sw_irq_handler(int irq, void *dev_id)
         }
         
         current_mode = MODE_MANUAL;
-        printk(KERN_INFO "SW2 pressed: MODE_MANUAL ON!\n");
+        printk(KERN_INFO "SW2 pressed: 수동 모드 ON!\n");
         return IRQ_HANDLED;
     }
 
@@ -172,7 +175,7 @@ static int led_sw_module_init(void)
 {
     int i, ret;
 
-    printk(KERN_INFO "Module init: LED & SW control\n");
+    printk(KERN_INFO "Module init\n");
 
     /* LED GPIO init */
     for (i = 0; i < 4; i++) {
