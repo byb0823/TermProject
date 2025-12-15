@@ -78,8 +78,7 @@ static void toggle_manual_led(int index)
 {
     led_state[index] = !led_state[index];
     gpio_set_value(led[index], led_state[index]);
-    printk(KERN_INFO "Manual Mode: LED[%d] (GPIO %d) Toggled to %d\n", 
-           index, led[index], led_state[index]);
+    printk(KERN_INFO "Manual Mode: LED[%d] (GPIO %d) Toggled to %d\n", index, led[index], led_state[index]);
 }
 
 static void reset_mode(void)
