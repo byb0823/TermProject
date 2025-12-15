@@ -78,7 +78,12 @@ static void toggle_manual_led(int index)
 {
     led_state[index] = !led_state[index];
     gpio_set_value(led[index], led_state[index]);
-    printk(KERN_INFO "Manual Mode: LED[%d] (GPIO %d) Toggled to %d\n", index, led[index], led_state[index]);
+
+    if (led_state[index] == HIGH) {
+        printk(KERN_INFO "led[%d] ON\n", index);
+    } else {
+        printk(KERN_INFO "led[%d] OFF\n", index);
+    }
 }
 
 static void reset_mode(void)
@@ -93,7 +98,6 @@ static void reset_mode(void)
     }
     
     current_mode = 0;
-    printk(KERN_INFO "Mode RESET: All LEDs OFF.\n");
 }
 
 static void timer_func(struct timer_list *t)
@@ -122,7 +126,7 @@ static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
             set_all_led(HIGH); 
             current_mode = MODE_ALL;
             mod_timer(&led_timer, jiffies + HZ * 2);
-            printk(KERN_INFO "Mode 1: ALL mode activated.\n");
+            printk(KERN_INFO "전체 모드 ON! \n");
             break;
 
         case MODE_SINGLE:
@@ -131,7 +135,7 @@ static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
             led_state[0] = HIGH;
             gpio_set_value(led[0], HIGH);
 
-            printk(KERN_INFO "Mode 2: SINGLE mode activated. LED[0] ON.\n");
+            printk(KERN_INFO "개별 모드 ON!\n");
             current_mode = MODE_SINGLE;
 
             mod_timer(&led_timer, jiffies + HZ * 2);
@@ -139,11 +143,12 @@ static long led_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
         case MODE_MANUAL:
             current_mode = MODE_MANUAL;
-            printk(KERN_INFO "Mode 3: MANUAL mode activated.\n");
+            printk(KERN_INFO "수동 모드 ON!\n");
             break;
 
         case MODE_RESET: 
             reset_mode();
+            printk(KERN_INFO "모드 리셋!\n");
             break;
 
         case IOCTL_MANUAL_CONTROL:
