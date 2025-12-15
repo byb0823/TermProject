@@ -35,7 +35,7 @@ static void alarm_timer_callback(struct timer_list *t)
         set_all_leds(led_state);
         
         // 2초 후 다시 타이머 설정
-        mod_timer(&alarm_timer, jiffies + msecs_to_jiffies(2000));
+        mod_timer(&alarm_timer, jiffies + HZ * 2);
     }
 }
 
@@ -63,7 +63,7 @@ static irqreturn_t pir_irq_handler(int irq, void *dev_id)
         set_all_leds(led_state);
         
         // 타이머 시작
-        mod_timer(&alarm_timer, jiffies + msecs_to_jiffies(2000));
+        mod_timer(&alarm_timer, jiffies + HZ * 2);
     }
     
     return IRQ_HANDLED;
